@@ -1,45 +1,41 @@
-import { test,expect } from '@playwright/test';
-test('student revision and teacher review persist through reload',async({page})=>{
- await page.goto('/');
- await expect(page.getByText('模拟演示模式')).toBeVisible();
- await page.getByRole('button',{name:'先体验一篇示例作文'}).click();
- await page.getByRole('button',{name:'保存初稿，开始诊断'}).click();
- await expect(page.getByRole('heading',{name:'先把“为什么”说清楚'})).toBeVisible();
- await page.getByRole('button',{name:'给我更具体的提示'}).click();
- await expect(page.getByText('第二级 · 修改方向')).toBeVisible();
- await page.getByRole('button',{name:'给我更具体的提示'}).click();
- await expect(page.getByText('第三级 · 局部句式参考')).toBeVisible();
+import {test,expect} from '@playwright/test';
+test('application writing: evidence, hints, revision, teacher review and export',async({page})=>{
+ await page.goto('/');await expect(page.getByText('模拟演示模式',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'体验应用文示例'}).click();
+ await page.getByRole('checkbox',{name:'我已核对题目'}).check();
+ await page.getByRole('button',{name:'保存初稿，开始批改'}).click();
+ await expect(page.getByRole('heading',{name:'具体反馈，比一个分数更重要'})).toBeVisible();
+ await page.locator('summary').filter({hasText:'invite you attend'}).first().click();
+ await expect(page.locator('mark')).toHaveText('invite you attend');
+ await page.getByRole('button',{name:'给我更具体的提示'}).click();await expect(page.getByText('第二级 · 修改方向')).toBeVisible();
+ await page.getByRole('button',{name:'给我更具体的提示'}).click();await expect(page.getByText('本任务未开启局部示例')).toBeVisible();
  await page.getByRole('button',{name:'自主修改',exact:true}).click();
- await page.getByLabel('二稿 ·').fill('在快节奏的时代，我们可以为深度思考放慢脚步。例如，阅读时停下来思考一段文字的推理，可以帮助我们发现逻辑上的跳跃。这说明慢的价值在于有意识地反思，而不是单纯降低速度。然而，面对紧急任务，我们仍需迅速行动。因此，应根据情境调整节奏，而不能认为慢下来就能带来成功。');
- await page.getByRole('button',{name:'提交二稿并查看变化'}).click();
- await expect(page.getByText('已确认解决：0 项', {exact:false})).toBeVisible();
+ const editor=page.getByLabel('二稿第1段');const before=await editor.inputValue();await editor.fill(before.replace('invite you attend','invite you to attend'));
+ await page.getByRole('button',{name:'提交二稿并比较'}).click();await expect(page.getByRole('heading',{name:'看见变化，也看见下一步'})).toBeVisible();await expect(page.getByText('已解决',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'分享给教师复核（本机演示）'}).click();
- await page.getByRole('button',{name:'教师复核'}).click();
- await page.getByPlaceholder('填写判断依据；修改反馈时必填').first().fill('该表述需要结合上下文，不宜直接判定为错误。');
- await page.getByRole('button',{name:'修改',exact:true}).first().click();
- await page.reload();
- await page.getByRole('button',{name:'教师复核'}).click();
- await expect(page.getByPlaceholder('填写判断依据；修改反馈时必填').first()).toHaveValue('该表述需要结合上下文，不宜直接判定为错误。');
- await expect(page.locator('.teacher-item .tag').first()).toHaveText('修改');
- await page.getByRole('button',{name:'学习概览'}).click();
- page.once('dialog',dialog=>dialog.accept());
- await page.getByRole('button',{name:'删除快与慢的生活智慧'}).click();
- await expect(page.getByText('你的下一次进步，从这里开始')).toBeVisible();
+ const downloaded=page.waitForEvent('download');await page.getByRole('button',{name:'JSON',exact:true}).click();expect((await downloaded).suggestedFilename()).toBe('WriteWise-进步报告.json');
+ await page.getByRole('button',{name:'教师复核',exact:false}).first().click();await page.getByRole('textbox',{name:'教师备注'}).first().fill('已核实此处结构问题，建议保留学生原意。');await page.getByRole('button',{name:'修改',exact:true}).first().click();
+ await page.reload();await page.getByRole('button',{name:'教师复核',exact:false}).first().click();await expect(page.getByRole('textbox',{name:'教师备注'}).first()).toHaveValue('已核实此处结构问题，建议保留学生原意。');
+ await page.getByRole('button',{name:'批改记录',exact:false}).click();page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'删除An invitation to our English club'}).click();await expect(page.getByText('从一篇已完成的英文作文开始')).toBeVisible();
 });
-test('API rejects invalid requests and returns anchored mock evidence',async({request})=>{
- const bad=await request.post('/api/analyze',{data:{title:'',text:''}});expect(bad.status()).toBe(400);
- const broken=await request.post('/api/analyze',{data:'{oops',headers:{'Content-Type':'application/json'}});expect(broken.status()).toBe(400);
- const text='所有人都必然成功。这个判断值得推敲。';const valid=await request.post('/api/analyze',{data:{title:'测试',text}});expect(valid.ok()).toBe(true);const r=await valid.json();expect(r.provider).toBe('mock');for(const d of r.dimensions){for(const e of d.evidence)expect(text.slice(e.start,e.end)).toBe(e.quote);}
+test('continuation uses separate reading/student evidence and excludes given text from word count',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'体验读后续写示例'}).click();await page.getByRole('checkbox',{name:'我已核对题目'}).check();await page.getByRole('button',{name:'保存初稿，开始批改'}).click();
+ await expect(page.getByRole('heading',{name:'同一条围巾的颜色是否前后一致？'})).toBeVisible();await expect(page.getByText('故事原文',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'情节与衔接',exact:true}).click();await expect(page.getByRole('heading',{name:/故事事实与合理想象/})).toBeVisible();await page.getByRole('button',{name:'自主修改',exact:true}).click();await expect(page.getByText(/学生正文.*含给定句/)).toBeVisible();
 });
-test('real mode requires consent and keeps upstream failures visible',async({page})=>{
- await page.route('**/api/config',route=>route.fulfill({json:{provider:'openai-compatible',model:'test-model',configured:true,external:true}}));
- await page.route('**/api/analyze',async route=>{expect(route.request().postDataJSON().externalConsent).toBe(true);await route.fulfill({status:504,json:{error:'模型响应超时，请稍后重试。',code:'TIMEOUT'}});});
- await page.goto('/');await expect(page.getByText('真实 AI 模式',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'先体验一篇示例作文'}).click();
- await expect(page.getByRole('button',{name:'保存初稿，开始诊断'})).toBeDisabled();
- await page.getByRole('checkbox',{name:'我同意将本次作文、题目和材料发送给所配置的模型服务。'}).check();
- await page.getByRole('button',{name:'保存初稿，开始诊断'}).click();
- await expect(page.getByRole('dialog').getByRole('alert')).toContainText('模型响应超时');
- await expect(page.getByRole('dialog')).toBeVisible();
- await expect(page.getByRole('heading',{name:'先把“为什么”说清楚'})).toHaveCount(0);
+test('legacy data stays byte-for-byte intact, malformed new storage is not erased',async({page})=>{
+ await page.addInitScript(()=>{localStorage.setItem('wensi-tasks-v1','[{"legacy":"语文记录"}]');localStorage.setItem('writewise-tasks-v2','broken-data');});await page.goto('/');await expect(page.getByText('发现旧版语文训练记录')).toBeVisible();await expect(page.locator('.error[role=alert]')).toContainText('暂停自动保存');expect(await page.evaluate(()=>localStorage.getItem('wensi-tasks-v1'))).toBe('[{"legacy":"语文记录"}]');expect(await page.evaluate(()=>localStorage.getItem('writewise-tasks-v2'))).toBe('broken-data');
+});
+test('real-mode consent and failure leave inputs intact without mock fallback',async({page})=>{
+ await page.route('**/api/config',r=>r.fulfill({json:{provider:'openai-compatible',model:'test-model',configured:true,external:true}}));await page.route('**/api/analyze',async r=>{expect(r.request().postDataJSON().externalConsent).toBe(true);await r.fulfill({status:504,json:{message:'模型响应超时，没有结果。'}});});await page.goto('/');await page.getByRole('button',{name:'体验应用文示例'}).click();const submit=page.getByRole('button',{name:'保存初稿，开始批改'});await expect(submit).toBeDisabled();await page.getByRole('checkbox',{name:'我同意将本次题目'}).check();await submit.click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('超时');await expect(page.getByLabel('学生英文正文')).not.toBeEmpty();
+});
+test('invalid requests are rejected clearly',async({request})=>{
+ const r=await request.post('/api/analyze',{data:{task:{}}});expect(r.status()).toBe(400);const bad=await request.post('/api/analyze',{data:'bad',headers:{'content-type':'application/json'}});expect(bad.status()).toBe(400);
+});
+
+test('context extraction stays editable and unconfirmed review is limited',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'体验应用文示例'}).click();await page.getByRole('button',{name:'AI 整理任务要点'}).click();await expect(page.getByText('模拟提取仅按分隔符整理任务',{exact:false})).toBeVisible();await expect(page.getByRole('checkbox',{name:'我已核对题目'})).not.toBeChecked();await page.getByRole('button',{name:'保存初稿，开始批改'}).click();await expect(page.getByText('受限反馈：',{exact:false})).toBeVisible();await expect(page.getByText('不可评估',{exact:true}).first()).toBeVisible();
+});
+test('mobile layout fits and all form controls remain usable',async({page})=>{
+ await page.setViewportSize({width:390,height:844});await page.goto('/');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await page.getByRole('button',{name:'体验读后续写示例'}).click();await expect(page.getByLabel('第1段学生续写')).toBeVisible();await page.getByRole('button',{name:'关闭',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
 });
